@@ -6,8 +6,8 @@ import me.tongfei.progressbar.ProgressBar;
 import me.tongfei.progressbar.ProgressBarBuilder;
 import me.tongfei.progressbar.ProgressBarStyle;
 
-import static tec.units.indriya.unit.MetricPrefix.MILLI;
-import static tec.units.indriya.unit.Units.SECOND;
+import static tech.units.indriya.unit.MetricPrefix.MILLI;
+import static tech.units.indriya.unit.Units.SECOND;
 
 /**
  * @author cl
@@ -31,10 +31,8 @@ public class ProgressBarHandler  {
         progressBar.bind(status::getProgressInMilliSeconds);
         progressBar.addBitOfInformation(new BitOfInformation("simulation time passed", status::getElapsedTime));
         progressBar.addBitOfInformation(new BitOfInformation("speed", status::getEstimatedSpeed));
-//        progressBar.addBitOfInformation(new BitOfInformation("local error", status::getLargestLocalError));
-//        progressBar.addBitOfInformation(new BitOfInformation("critical local update", status::getLargestLocalErrorUpdate));
-        progressBar.addBitOfInformation(new BitOfInformation("global error", status::getLargestGlobalError));
-        progressBar.addBitOfInformation(new BitOfInformation("accuracy gain", status::getAccuracyGain));
+        //progressBar.addBitOfInformation(new BitOfInformation("etf", status::getEstimatedFinish));
+        //progressBar.addBitOfInformation(new BitOfInformation("local error", status::getLocalErrorStatus));
 
     }
 

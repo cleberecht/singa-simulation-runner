@@ -4,8 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
 import systems.uom.ucum.format.UCUMFormat;
-import tec.units.indriya.quantity.Quantities;
-import tec.units.indriya.quantity.QuantityDimension;
+import tech.units.indriya.quantity.Quantities;
+import tech.units.indriya.quantity.QuantityDimension;
 
 import javax.measure.Quantity;
 import javax.measure.Unit;
@@ -38,5 +38,12 @@ public class TimeQuantityConverter implements CommandLine.ITypeConverter<Quantit
         logger.error("unable to convert time {}", timeString);
         throw new IllegalArgumentException(timeString);
     }
+
+    public static void main(String[] args) {
+        String s = "4min";
+        TimeQuantityConverter c = new TimeQuantityConverter();
+        System.out.println(c.convert(s));
+    }
+
 
 }

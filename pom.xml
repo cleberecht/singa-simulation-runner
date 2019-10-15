@@ -6,7 +6,7 @@
 
     <groupId>bio.singa</groupId>
     <artifactId>singa-simulation-runner</artifactId>
-    <version>0.0.1</version>
+    <version>0.0.2</version>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -57,8 +57,14 @@
         <!-- singa -->
         <dependency>
             <groupId>bio.singa</groupId>
+            <artifactId>singa-javafx</artifactId>
+            <version>0.6.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>bio.singa</groupId>
             <artifactId>singa-exchange</artifactId>
-            <version>0.0.1</version>
+            <version>0.0.2</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.apache.logging.log4j</groupId>

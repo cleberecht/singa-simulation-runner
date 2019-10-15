@@ -4,14 +4,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
 import systems.uom.ucum.format.UCUMFormat;
-import tec.units.indriya.quantity.QuantityDimension;
+import tech.units.indriya.quantity.QuantityDimension;
 
 import javax.measure.Unit;
 import javax.measure.format.UnitFormat;
 import javax.measure.quantity.Time;
 
-import static tec.units.indriya.unit.MetricPrefix.MICRO;
-import static tec.units.indriya.unit.Units.SECOND;
+import static tech.units.indriya.unit.MetricPrefix.MICRO;
+import static tech.units.indriya.unit.Units.SECOND;
 
 /**
  * @author cl

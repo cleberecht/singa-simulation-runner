@@ -18,10 +18,9 @@ public class ConcentrationUnitConverter implements CommandLine.ITypeConverter<Un
 
     private static final Logger logger = LoggerFactory.getLogger(ConcentrationUnitConverter.class);
 
-    private static UnitFormat unitFormatService = ServiceProvider.current().getUnitFormatService().getUnitFormat("ASCII");
-
     @Override
     public Unit<MolarConcentration> convert(String unitString) {
+        UnitFormat unitFormatService = ServiceProvider.current().getUnitFormatService().getUnitFormat("ASCII");
         Unit<?> unit = unitFormatService.parse(unitString);
         if (unit.isCompatible(MOLE_PER_LITRE)) {
             return unit.asType(MolarConcentration.class);
