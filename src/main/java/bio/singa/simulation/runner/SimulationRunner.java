@@ -41,46 +41,57 @@ import static tech.units.indriya.unit.Units.SECOND;
 public class SimulationRunner implements Callable<Void> {
 
     private static final Logger logger = LoggerFactory.getLogger(SimulationRunner.class);
+    private VariationManager variationManager;
 
     @Parameters(index = "0",
             description = "The json file with the simulation.")
-    private Path simulationSetupPath;
+    Path simulationSetupPath;
 
     @Option(names = {"-t", "--termination-time"},
-            description = "The termination time of the simulation\n(e.g.: 10s, 0.5min, 1.5h; default: 1min)",
+            description = "The termination time of the simulation\n(e.g.: 10s, 0.5min, 1.5h; default: : ${DEFAULT-VALUE})",
             converter = TimeQuantityConverter.class,
             order = 0)
-    private Quantity<Time> terminationTime = Quantities.getQuantity(10, MILLI(SECOND));
+    Quantity<Time> terminationTime = Quantities.getQuantity(1, SECOND);
 
     @Option(names = {"-d", "-target-directory"},
             description = "The target folder, where observation files are created\n(default: [current working directory])",
             order = 1)
-    private Path targetDirectory = Paths.get("");
+    Path targetDirectory = Paths.get("");
 
     @Option(names = {"-oi", "--observation-number"},
             description = {"The number of observations during simulation",
-                    "default: 100"},
+                    "default: ${DEFAULT-VALUE}"},
             order = 3)
-    private double observations = 10.0;
+    double observations = 100.0;
 
     @Option(names = {"-oc", "--observed-concentration"},
             description = {"The unit in which concentrations are logged",
                     "e.g.: mol/L; default: ${DEFAULT-VALUE}"},
             converter = ConcentrationUnitConverter.class,
             order = 4)
-    private Unit<MolarConcentration> observedConcentrationUnit = NANO_MOLE_PER_LITRE;
 
+    private Unit<MolarConcentration> observedConcentrationUnit = NANO_MOLE_PER_LITRE;
     @Option(names = {"-ot", "--observed-time"},
             description = {"The unit in which times are logged",
                     "e.g.: ms; default: ${DEFAULT-VALUE}"},
             converter = TimeUnitConverter.class,
             order = 5)
-    private Unit<Time> observedTimeUnit = SECOND;
 
-    @Option(names = {"-v", "--variations"},
-            description = {"Run the simulation with all combinations of alternate values annotated."},
+    private Unit<Time> observedTimeUnit = SECOND;
+    @Option(names = {"-f", "--force-rerun"},
+            description = {"Do not check existing folders for already processed variation sets."},
             order = 6)
-    private boolean variationRun = true;
+
+    private boolean forceRerun = false;
+    @Option(names = {"-i", "--ignore-variations"},
+            description = {"Perform only one run with the base values in the setup file."},
+            order = 7)
+
+    private boolean ignoreVariations = false;
+    @Option(names = {"-p", "--hide-progress"},
+            description = {"Perform only one run with the base values in the setup file."},
+            order = 8)
+    boolean hideProgress = false;
 
     public static void main(String[] args) {
         CommandLine.call(new SimulationRunner(), args);
@@ -88,8 +99,6 @@ public class SimulationRunner implements Callable<Void> {
 
     @Override
     public Void call() {
-
-        // TODO make variation simulation resumeable (similar to runner in phd-simulations)
 
         System.out.println();
         System.out.println("Preparing simulation");
@@ -114,38 +123,54 @@ public class SimulationRunner implements Callable<Void> {
         }
 
         // generate observation directory
-        Path observationDirectory = targetDirectory;//.resolve("observations");
-        Recorders.createDirectories(observationDirectory);
+        Recorders.createDirectories(targetDirectory);
 
         // variation simulation
-        if (variationRun) {
-            // create simulation (to cache entities etc)
+        if (ignoreVariations) {
             Simulation simulation = SimulationRepresentation.to(representation);
-            VariationManager variationManager = new VariationManager();
-            // TODO add "big" progressbar for global simulation progress
-            // for each variation set
-            while (variationManager.hasVariationsLeft()) {
-                System.out.println("applying variation for simulation " + (variationManager.getCurrentVariation()+1) + " of " + variationManager.getPossibleVariations());
-                // create simulation
-                simulation = SimulationRepresentation.to(representation);
-                simulation.getScheduler().setRecalculationCutoff(0.05);
-                MembraneFactory.majorityVoteSubsectionRepresentations(simulation.getGraph());
-                variationManager.nextVariationSet();
-                variationManager.logVariations();
-                // create folder for this simulation
-                Path timestampedFolder = Recorders.appendTimestampedFolder(observationDirectory);
-                Recorders.createDirectories(timestampedFolder);
-                System.out.println("writing to path " + timestampedFolder);
-                // run simulation
-                runSingleSimulation(simulation, timestampedFolder);
-                System.out.println("finished Simulation " + (variationManager.getCurrentVariation()) + " of " + variationManager.getPossibleVariations());
-                System.out.println();
-            }
-        } else {
-            Simulation simulation = SimulationRepresentation.to(representation);
-            Path timestampedFolder = Recorders.appendTimestampedFolder(observationDirectory);
+            Path timestampedFolder = Recorders.appendTimestampedFolder(targetDirectory);
             Recorders.createDirectories(timestampedFolder);
             runSingleSimulation(simulation, timestampedFolder);
+            return null;
+        }
+        // create simulation (to cache entities etc)
+        Simulation simulation = SimulationRepresentation.to(representation);
+        variationManager = new VariationManager();
+        // TODO add "big" progressbar for global simulation progress
+        // for each variation set
+        while (variationManager.hasVariationsLeft()) {
+            System.out.println("applying variation for simulation " + (variationManager.getCurrentVariationIndex() + 1) + " of " + variationManager.getPossibleVariations());
+            // create simulation
+            simulation = SimulationRepresentation.to(representation);
+            // set cutoff
+            simulation.getScheduler().setRecalculationCutoff(0.05);
+            // fix subsections
+            MembraneFactory.majorityVoteSubsectionRepresentations(simulation.getGraph());
+            // get next variation set
+            variationManager.nextVariationSet();
+            if (!forceRerun) {
+                // check if the set was already processed
+                variationManager.determineProcessedVariations(targetDirectory);
+                String processed = variationManager.wasAlreadyProcessedIn();
+                if (!processed.isEmpty()) {
+                    System.out.println("set was already processed in " + processed);
+                    System.out.println();
+                    continue;
+                }
+            }
+            // console out variations that are applied
+            variationManager.consoleLogVariations();
+            // create time stamped folder for this simulation
+            Path timestampedFolder = Recorders.appendTimestampedFolder(targetDirectory);
+            Recorders.createDirectories(timestampedFolder);
+            System.out.println("writing to path " + timestampedFolder);
+            // create variation log
+            variationManager.generateJsonLog(timestampedFolder);
+            System.out.println("wrote variations.log");
+            // run simulation
+            runSingleSimulation(simulation, timestampedFolder);
+            System.out.println("finished Simulation " + (variationManager.getCurrentVariationIndex()) + " of " + variationManager.getPossibleVariations());
+            System.out.println();
         }
         return null;
     }
@@ -156,6 +181,8 @@ public class SimulationRunner implements Callable<Void> {
         SimulationManager manager = new SimulationManager(simulation);
         manager.setSimulationTerminationToTime(terminationTime);
         manager.setUpdateEmissionToTimePassed(terminationTime.divide(observations));
+        manager.setWriteAliveFile(true);
+        manager.setTargetPath(timestampedFolder);
 
         // setup termination latch
         CountDownLatch terminationLatch = new CountDownLatch(1);
@@ -166,7 +193,10 @@ public class SimulationRunner implements Callable<Void> {
         manager.addGraphUpdateListener(trajectoryObserver);
 
         // add progress bar
-        ProgressBarHandler progressBarHandler = new ProgressBarHandler(manager.getSimulationStatus());
+        ProgressBarHandler progressBarHandler = null;
+        if (!hideProgress) {
+            progressBarHandler = new ProgressBarHandler(manager.getSimulationStatus());
+        }
 
         // start simulation
         Thread thread = new Thread(manager);
@@ -176,12 +206,35 @@ public class SimulationRunner implements Callable<Void> {
         try {
             terminationLatch.await();
             thread.join();
-            progressBarHandler.tearDown();
+            if (progressBarHandler != null) {
+                progressBarHandler.tearDown();
+            }
+            finishAliveFile(timestampedFolder);
             TrajectoryDataset trajectoryDataset = TrajectoryDataset.of(trajectoryObserver.getTrajectories());
-            File trajectoryFile = timestampedFolder.resolve("trajectory.json").toFile();
-            trajectoryDataset.write(trajectoryFile);
+            if (Files.exists(timestampedFolder)) {
+                File trajectoryFile = timestampedFolder.resolve("trajectory.json").toFile();
+                trajectoryDataset.write(trajectoryFile);
+            } else {
+                // try to write to backup
+                Path path = Paths.get(System.getProperty("java.io.tmpdir")).resolve("singa_backup_results");
+                Path tempFolder = Recorders.appendTimestampedFolder(path);
+                Recorders.createDirectories(tempFolder);
+                System.out.println("unable to write file, trying to backup results in " + tempFolder);
+                variationManager.generateJsonLog(tempFolder);
+                File trajectoryFile = tempFolder.resolve("trajectory.json").toFile();
+                trajectoryDataset.write(trajectoryFile);
+            }
         } catch (InterruptedException | IOException e) {
-            e.printStackTrace();
+            logger.error("unable to read process simulation for {}", timestampedFolder, e);
+        }
+    }
+
+    private void finishAliveFile(Path timestampedFolder) {
+        Path aliveFile = timestampedFolder.resolve("alive");
+        try {
+            Files.write(aliveFile, "done".getBytes());
+        } catch (IOException e) {
+            logger.error("unable to read alive file file {}", aliveFile, e);
         }
     }
 

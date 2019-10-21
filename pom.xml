@@ -39,7 +39,7 @@
                             <archive>
                                 <manifest>
                                     <mainClass>
-                                        bio.singa.simulation.runner.SimulationRunner
+                                        bio.singa.simulation.runner.SimulationScheduler
                                     </mainClass>
                                 </manifest>
                             </archive>
