@@ -64,7 +64,7 @@ public class VariationManager {
                 featureState.put(quantitativeFeature.getIdentifier(), new Pair<>(0, quantitativeFeature.getAlternativeContents().size()));
             }
         }
-        for (ScalableQuantitativeFeature<?> scalableQuantitativeFeature : FeatureRegistry.getScalableQuantitativeFeatures()) {
+        for (AbstractScalableQuantitativeFeature<?> scalableQuantitativeFeature : FeatureRegistry.getScalableQuantitativeFeatures()) {
             if (!scalableQuantitativeFeature.getAlternativeContents().isEmpty()) {
                 featureState.put(scalableQuantitativeFeature.getIdentifier(), new Pair<>(0, scalableQuantitativeFeature.getAlternativeContents().size()));
             }
@@ -106,14 +106,18 @@ public class VariationManager {
         return permutationIterator.hasNext();
     }
 
-    public Path generateJsonLog(Path timestampedFolder) {
+    public Path generateJsonLog(Path directory) {
+        return generateJsonLog(directory, "variations.json");
+    }
+
+    public Path generateJsonLog(Path directory, String fileName) {
         try {
             String variations = FeatureDataset.generateVariableFeatureLog();
-            Path logPath = timestampedFolder.resolve("variations.json");
+            Path logPath = directory.resolve(fileName);
             Files.write(logPath, variations.getBytes());
             return logPath;
         } catch (IOException e) {
-            throw new UncheckedIOException("Unable to write variation log to " + timestampedFolder + ".", e);
+            throw new UncheckedIOException("Unable to write variation log to " + directory + ".", e);
         }
     }
 
