@@ -1,9 +1,9 @@
 package bio.singa.simulation.runner;
 
 import bio.singa.exchange.Converter;
+import bio.singa.exchange.ProcessingTicket;
 import bio.singa.exchange.SimulationRepresentation;
 import bio.singa.exchange.trajectories.TrajectoryDataset;
-import bio.singa.features.quantities.MolarConcentration;
 import bio.singa.simulation.model.agents.surfacelike.MembraneFactory;
 import bio.singa.simulation.model.simulation.Simulation;
 import bio.singa.simulation.model.simulation.SimulationManager;
@@ -12,16 +12,13 @@ import bio.singa.simulation.trajectories.nested.NestedUpdateRecorder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
-import tech.units.indriya.quantity.Quantities;
 
-import javax.measure.Quantity;
-import javax.measure.Unit;
-import javax.measure.quantity.Time;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 
@@ -35,63 +32,30 @@ import static tech.units.indriya.unit.Units.SECOND;
  */
 @Command(description = "Execute singa simulations from json files.",
         name = "singa-run",
-        version = "v0.0.1",
+        version = "v0.0.2",
         mixinStandardHelpOptions = true,
         sortOptions = false)
 public class SimulationRunner implements Callable<Void> {
 
     private static final Logger logger = LoggerFactory.getLogger(SimulationRunner.class);
-    private VariationManager variationManager;
 
     @Parameters(index = "0",
             description = "The json file with the simulation.")
     Path simulationSetupPath;
 
-    @Option(names = {"-t", "--termination-time"},
-            description = "The termination time of the simulation\n(e.g.: 10s, 0.5min, 1.5h; default: : ${DEFAULT-VALUE})",
-            converter = TimeQuantityConverter.class,
-            order = 0)
-    Quantity<Time> terminationTime = Quantities.getQuantity(1, SECOND);
+    @Parameters(index = "1",
+            description = "The folder, where ticket are pulled from.")
+    Path ticketDirectory = Paths.get("tickets");
 
-    @Option(names = {"-d", "-target-directory"},
+    @Option(names = {"-t", "-target-directory"},
             description = "The target folder, where observation files are created\n(default: [current working directory])",
             order = 1)
     Path targetDirectory = Paths.get("");
 
-    @Option(names = {"-oi", "--observation-number"},
-            description = {"The number of observations during simulation",
-                    "default: ${DEFAULT-VALUE}"},
-            order = 3)
-    double observations = 100.0;
-
-    @Option(names = {"-oc", "--observed-concentration"},
-            description = {"The unit in which concentrations are logged",
-                    "e.g.: mol/L; default: ${DEFAULT-VALUE}"},
-            converter = ConcentrationUnitConverter.class,
-            order = 4)
-
-    private Unit<MolarConcentration> observedConcentrationUnit = NANO_MOLE_PER_LITRE;
-    @Option(names = {"-ot", "--observed-time"},
-            description = {"The unit in which times are logged",
-                    "e.g.: ms; default: ${DEFAULT-VALUE}"},
-            converter = TimeUnitConverter.class,
-            order = 5)
-
-    private Unit<Time> observedTimeUnit = SECOND;
-    @Option(names = {"-f", "--force-rerun"},
-            description = {"Do not check existing folders for already processed variation sets."},
-            order = 6)
-
-    private boolean forceRerun = false;
-    @Option(names = {"-i", "--ignore-variations"},
-            description = {"Perform only one run with the base values in the setup file."},
-            order = 7)
-
-    private boolean ignoreVariations = false;
-    @Option(names = {"-p", "--hide-progress"},
-            description = {"Perform only one run with the base values in the setup file."},
-            order = 8)
-    boolean hideProgress = false;
+    @Option(names = {"-p", "--show-progress"},
+            description = {"Show progress bar instead of log."},
+            order = 2)
+    boolean showProgress = false;
 
     public static void main(String[] args) {
         CommandLine.call(new SimulationRunner(), args);
@@ -125,62 +89,53 @@ public class SimulationRunner implements Callable<Void> {
         // generate observation directory
         Recorders.createDirectories(targetDirectory);
 
-        // variation simulation
-        if (ignoreVariations) {
-            Simulation simulation = SimulationRepresentation.to(representation);
-            Path timestampedFolder = Recorders.appendTimestampedFolder(targetDirectory);
-            Recorders.createDirectories(timestampedFolder);
-            runSingleSimulation(simulation, timestampedFolder);
-            return null;
-        }
         // create simulation (to cache entities etc)
         Simulation simulation = SimulationRepresentation.to(representation);
-        variationManager = new VariationManager();
         // TODO add "big" progressbar for global simulation progress
         // for each variation set
-        while (variationManager.hasVariationsLeft()) {
-            System.out.println("applying variation for simulation " + (variationManager.getCurrentVariationIndex() + 1) + " of " + variationManager.getPossibleVariations());
+        TicketManager ticketManager = new TicketManager(ticketDirectory);
+
+        while (ticketManager.ticketsAvailable()) {
             // create simulation
             simulation = SimulationRepresentation.to(representation);
             // set cutoff
             simulation.getScheduler().setRecalculationCutoff(0.05);
             // fix subsections
             MembraneFactory.majorityVoteSubsectionRepresentations(simulation.getGraph());
-            // get next variation set
-            variationManager.nextVariationSet();
-            if (!forceRerun) {
-                // check if the set was already processed
-                variationManager.determineProcessedVariations(targetDirectory);
-                String processed = variationManager.wasAlreadyProcessedIn();
-                if (!processed.isEmpty()) {
-                    System.out.println("set was already processed in " + processed);
-                    System.out.println();
-                    continue;
-                }
+            // pull ticket
+            Optional<ProcessingTicket> optionalTicket = ticketManager.pullTicket();
+            if (!optionalTicket.isPresent()) {
+                continue;
             }
-            // console out variations that are applied
-            variationManager.consoleLogVariations();
+            ProcessingTicket ticket = optionalTicket.get();
+            System.out.println("applying variation for ticket " + ticket.getIdentifier());
+            // get variations from ticket
+            ticketManager.redeemTicket(ticket);
             // create time stamped folder for this simulation
-            Path timestampedFolder = Recorders.appendTimestampedFolder(targetDirectory);
+            Path timestampedFolder = targetDirectory.resolve(ticket.getSimulation().replaceFirst("[.][^.]+$", "")).resolve(ticket.getIdentifier());
             Recorders.createDirectories(timestampedFolder);
             System.out.println("writing to path " + timestampedFolder);
             // create variation log
-            variationManager.generateJsonLog(timestampedFolder);
+            try {
+                ticket.writeFeatureSet(timestampedFolder.resolve("variations.json"));
+            } catch (IOException e) {
+                logger.error("unable to write variations to file {}", timestampedFolder, e);
+            }
             System.out.println("wrote variations.log");
             // run simulation
-            runSingleSimulation(simulation, timestampedFolder);
-            System.out.println("finished Simulation " + (variationManager.getCurrentVariationIndex()) + " of " + variationManager.getPossibleVariations());
-            System.out.println();
+            runSingleSimulation(simulation, ticket, timestampedFolder);
+            ticketManager.closeTicket(ticket);
+            System.out.println("finished ticket " + ticket.getIdentifier());
         }
         return null;
     }
 
-    private void runSingleSimulation(Simulation simulation, Path timestampedFolder) {
+    private void runSingleSimulation(Simulation simulation, ProcessingTicket ticket, Path timestampedFolder) {
         System.out.println("running simulation");
         // setup manager
         SimulationManager manager = new SimulationManager(simulation);
-        manager.setSimulationTerminationToTime(terminationTime);
-        manager.setUpdateEmissionToTimePassed(terminationTime.divide(observations));
+        manager.setSimulationTerminationToTime(ticket.getTotalTime());
+        manager.setUpdateEmissionToTimePassed(ticket.getObservationTime());
         manager.setWriteAliveFile(true);
         manager.setTargetPath(timestampedFolder);
 
@@ -194,7 +149,7 @@ public class SimulationRunner implements Callable<Void> {
 
         // add progress bar
         ProgressBarHandler progressBarHandler = null;
-        if (!hideProgress) {
+        if (showProgress) {
             progressBarHandler = new ProgressBarHandler(manager.getSimulationStatus());
         }
 
@@ -217,10 +172,10 @@ public class SimulationRunner implements Callable<Void> {
             } else {
                 // try to write to backup
                 Path path = Paths.get(System.getProperty("java.io.tmpdir")).resolve("singa_backup_results");
-                Path tempFolder = Recorders.appendTimestampedFolder(path);
+                Path tempFolder = path.resolve(ticket.getSimulation().replaceFirst("[.][^.]+$", "")).resolve(ticket.getIdentifier());;
                 Recorders.createDirectories(tempFolder);
                 System.out.println("unable to write file, trying to backup results in " + tempFolder);
-                variationManager.generateJsonLog(tempFolder);
+                ticket.writeFeatureSet(timestampedFolder.resolve("variations.json"));
                 File trajectoryFile = tempFolder.resolve("trajectory.json").toFile();
                 trajectoryDataset.write(trajectoryFile);
             }

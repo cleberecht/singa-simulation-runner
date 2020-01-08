@@ -1,12 +1,16 @@
 package bio.singa.simulation.runner;
 
 import bio.singa.core.utility.Pair;
+import bio.singa.exchange.ProcessingTicket;
 import bio.singa.exchange.features.FeatureDataset;
 import bio.singa.exchange.features.FeatureRepresentation;
 import bio.singa.features.model.*;
+import bio.singa.features.quantities.MolarConcentration;
 import bio.singa.mathematics.combinatorics.StreamPermutations;
 
 import javax.measure.Quantity;
+import javax.measure.Unit;
+import javax.measure.quantity.Time;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.DirectoryStream;
@@ -118,6 +122,43 @@ public class VariationManager {
             return logPath;
         } catch (IOException e) {
             throw new UncheckedIOException("Unable to write variation log to " + directory + ".", e);
+        }
+    }
+
+    public ProcessingTicket generateTicket(String identifier, String simulation, Quantity<Time> totalTime, Quantity<Time> observationTime, Unit<MolarConcentration> concentrationUnit, Unit<Time> timeUnit) {
+        ProcessingTicket ticket = new ProcessingTicket();
+        ticket.setIdentifier(identifier);
+        ticket.setSimulation(simulation);
+        ticket.setTotalTime(totalTime);
+        ticket.setObservationTime(observationTime);
+        ticket.setObservedConcentrationUnit(concentrationUnit);
+        ticket.setObservedTimeUnit(timeUnit);
+
+        List<FeatureRepresentation<?>> features = new ArrayList<>();
+        FeatureRegistry.getScalableQuantitativeFeatures().stream()
+                .filter(feature -> !feature.getAlternativeContents().isEmpty())
+                .map(FeatureRepresentation::of)
+                .forEach(features::add);
+        FeatureRegistry.getQuantitativeFeatures().stream()
+                .filter(feature -> !feature.getAlternativeContents().isEmpty())
+                .map(FeatureRepresentation::of)
+                .forEach(features::add);
+        FeatureRegistry.getQualitativeFeatures().stream()
+                .filter(feature -> !feature.getAlternativeContents().isEmpty())
+                .map(FeatureRepresentation::of)
+                .forEach(features::add);
+        ticket.setFeatures(features);
+
+        return ticket;
+    }
+
+    public void writeTicket(ProcessingTicket ticket, Path openTicketPath) {
+        try {
+            String json = ticket.toJson();
+            Path logPath = openTicketPath.resolve(ticket.getIdentifier());
+            Files.write(logPath, json.getBytes());
+        } catch (IOException e) {
+            throw new UncheckedIOException("Unable to write variation log to " + openTicketPath + ".", e);
         }
     }
 

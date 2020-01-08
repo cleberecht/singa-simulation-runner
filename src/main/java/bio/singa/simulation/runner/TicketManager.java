@@ -1,12 +1,13 @@
 package bio.singa.simulation.runner;
 
-import bio.singa.exchange.features.FeatureDataset;
+import bio.singa.exchange.ProcessingTicket;
 import bio.singa.exchange.features.FeatureRepresentation;
 import bio.singa.features.model.Feature;
 import bio.singa.features.model.FeatureRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
@@ -38,7 +39,6 @@ public class TicketManager {
     private Path donePath;
 
 
-
     public TicketManager(Path ticketPath) {
         this.ticketPath = ticketPath;
         openTicketPath = ticketPath.resolve("open");
@@ -46,12 +46,12 @@ public class TicketManager {
         donePath = ticketPath.resolve("done");
     }
 
-    public synchronized Optional<Ticket> pullTicket() {
+    public synchronized Optional<ProcessingTicket> pullTicket() {
         try (DirectoryStream<Path> ticketFileStream = Files.newDirectoryStream(openTicketPath)) {
             Iterator<Path> iterator = ticketFileStream.iterator();
             if (iterator.hasNext()) {
                 boolean validTicket = false;
-                List<FeatureRepresentation<?>> features = null;
+                ProcessingTicket ticket = null;
                 String ticketId;
                 do {
                     Path currentTicket = iterator.next();
@@ -65,7 +65,7 @@ public class TicketManager {
                         if (lockAcquired(fileLock)) {
                             InputStream is = Channels.newInputStream(fc);
                             String json = new String(is.readAllBytes());
-                            features = FeatureDataset.fromDatasetRepresentation(json);
+                            ticket = ProcessingTicket.fromJson(json);
                             // copy to processing folder
                             Files.copy(currentTicket, processingPath.resolve(ticketId));
                             validTicket = true;
@@ -75,9 +75,9 @@ public class TicketManager {
                     }
                 } while (!validTicket);
                 // remove ticket
-                if (features != null) {
+                if (ticket != null) {
                     Files.deleteIfExists(openTicketPath.resolve(ticketId));
-                    return Optional.of(new Ticket(ticketId, features));
+                    return Optional.of(ticket);
                 }
             }
         } catch (IOException e) {
@@ -86,7 +86,7 @@ public class TicketManager {
         return Optional.empty();
     }
 
-    public void redeemTicket(Ticket ticketData) {
+    public void redeemTicket(ProcessingTicket ticketData) {
         for (FeatureRepresentation<?> featureRepresentation : ticketData.getFeatures()) {
             Feature<?> feature = FeatureRegistry.get(featureRepresentation.getIdentifier());
             Object content = featureRepresentation.fetchContent();
@@ -94,16 +94,24 @@ public class TicketManager {
             int alternativeContentIndex = alternativeValues.indexOf(content);
             feature.setAlternativeContent(alternativeContentIndex);
         }
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
     }
 
-    public void closeTicket(Ticket ticketData) {
+    public boolean ticketsAvailable() {
+        try (DirectoryStream<Path> ticketFileStream = Files.newDirectoryStream(openTicketPath)) {
+            for (Path ticketFile : ticketFileStream) {
+                if (isAvailable(ticketFile)) {
+                    return true;
+                }
+            }
+        } catch (IOException e) {
+            logger.warn("unable to retrieve any ticket", e);
+        }
+        return false;
+    }
+
+    public void closeTicket(ProcessingTicket ticketData) {
         try {
-            Files.move(processingPath.resolve(ticketData.getId()), donePath.resolve(ticketData.getId()));
+            Files.move(processingPath.resolve(ticketData.getIdentifier()), donePath.resolve(ticketData.getIdentifier()));
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -117,24 +125,9 @@ public class TicketManager {
         return uuidPattern.matcher(uuid).matches();
     }
 
-    public static class Ticket {
-
-        private final String id;
-        private final List<FeatureRepresentation<?>> features;
-
-        public Ticket(String id, List<FeatureRepresentation<?>> features) {
-            this.id = id;
-            this.features = features;
-        }
-
-        public String getId() {
-            return id;
-        }
-
-        public List<FeatureRepresentation<?>> getFeatures() {
-            return features;
-        }
-
+    private boolean isAvailable(Path filePath) {
+        File file = filePath.toFile();
+        return file.isFile() && file.exists() && file.length() > 0;
     }
 
 }

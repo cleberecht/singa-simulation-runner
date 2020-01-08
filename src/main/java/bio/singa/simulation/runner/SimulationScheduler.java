@@ -74,12 +74,11 @@ public class SimulationScheduler implements Callable<Void> {
             simulationRunner.simulationSetupPath = setupFilePath.getParent().resolve(simulationSetupPath);
             // determine output directory (depending on setup file name)
             String outputDirectory = simulationSetupPath.getFileName().toString().replaceFirst("[.][^.]+$", "");
+
             rootDirectory = this.targetDirectory.resolve(outputDirectory);
             simulationRunner.targetDirectory = rootDirectory;
-            // set time and observations
-            simulationRunner.terminationTime = terminationTime;
-            simulationRunner.observations = observations;
-            simulationRunner.hideProgress = true;
+            simulationRunner.ticketDirectory = simulationSetupPath.resolve(outputDirectory);
+            simulationRunner.showProgress = true;
 
             checkForDeadSimulations();
             ExecutorService pool = Executors.newSingleThreadExecutor();
