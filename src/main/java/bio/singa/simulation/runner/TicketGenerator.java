@@ -29,7 +29,7 @@ import static tech.units.indriya.unit.Units.SECOND;
  * @author cl
  */
 @Command(description = "Generate tickets for parallel processing",
-        name = "singa-tickets",
+        name = "ticket-generator",
         version = "v0.0.1",
         mixinStandardHelpOptions = true,
         sortOptions = false)

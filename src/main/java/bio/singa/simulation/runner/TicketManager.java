@@ -7,10 +7,7 @@ import bio.singa.features.model.FeatureRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
@@ -22,6 +19,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * @author cl
@@ -61,17 +59,28 @@ public class TicketManager {
                     }
                     RandomAccessFile randomAccessFile = new RandomAccessFile(currentTicket.toFile(), "rw");
                     FileChannel fc = randomAccessFile.getChannel();
-                    try (fc; randomAccessFile; FileLock fileLock = fc.tryLock()) {
-                        if (lockAcquired(fileLock)) {
+
+                    try {
+                        FileChannel channel = new RandomAccessFile(currentTicket.toFile(), "rw").getChannel();
+                        FileLock lock = channel.lock();
+                        try {
+                            lock = channel.tryLock();
+                        } catch (OverlappingFileLockException e) {
+                            logger.trace("ticket {} was already locked, skipping", ticketId);
+                        }
+                        if (lockAcquired(lock)) {
                             InputStream is = Channels.newInputStream(fc);
-                            String json = new String(is.readAllBytes());
+                            String json = new BufferedReader(new InputStreamReader(is)).lines()
+                                    .collect(Collectors.joining("\n"));
                             ticket = ProcessingTicket.fromJson(json);
                             // copy to processing folder
                             Files.copy(currentTicket, processingPath.resolve(ticketId));
                             validTicket = true;
                         }
-                    } catch (OverlappingFileLockException | IOException e) {
-                        logger.trace("ticket {} was already locked, skipping", ticketId);
+                        lock.release();
+                        channel.close();
+                    } catch (IOException e) {
+                        logger.trace("unable to read ticket {}", ticketId);
                     }
                 } while (!validTicket);
                 // remove ticket

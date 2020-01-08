@@ -31,7 +31,7 @@ import static tech.units.indriya.unit.Units.SECOND;
  * @author cl
  */
 @Command(description = "Execute singa simulations from json files.",
-        name = "singa-run",
+        name = "simulation-runner",
         version = "v0.0.2",
         mixinStandardHelpOptions = true,
         sortOptions = false)
@@ -41,21 +41,21 @@ public class SimulationRunner implements Callable<Void> {
 
     @Parameters(index = "0",
             description = "The json file with the simulation.")
-    Path simulationSetupPath;
+    private Path simulationSetupPath;
 
     @Parameters(index = "1",
             description = "The folder, where ticket are pulled from.")
-    Path ticketDirectory = Paths.get("tickets");
+    private Path ticketDirectory = Paths.get("tickets");
 
     @Option(names = {"-t", "-target-directory"},
             description = "The target folder, where observation files are created\n(default: [current working directory])",
             order = 1)
-    Path targetDirectory = Paths.get("");
+    private Path targetDirectory = Paths.get("");
 
     @Option(names = {"-p", "--show-progress"},
             description = {"Show progress bar instead of log."},
             order = 2)
-    boolean showProgress = false;
+    private boolean showProgress = false;
 
     public static void main(String[] args) {
         CommandLine.call(new SimulationRunner(), args);
