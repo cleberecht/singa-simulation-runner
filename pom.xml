@@ -58,7 +58,9 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>bio.singa.simulation.runner.SimulationOverseer</mainClass>
+                            <mainClass>
+                                bio.singa.simulation.runner.SimulationOverseer
+                            </mainClass>
                         </manifest>
                     </archive>
                 </configuration>

@@ -7,11 +7,9 @@ import bio.singa.features.model.FeatureRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
-import java.nio.channels.Channels;
-import java.nio.channels.FileChannel;
+import java.io.File;
+import java.io.IOException;
 import java.nio.channels.FileLock;
-import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -19,7 +17,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * @author cl
@@ -57,30 +54,15 @@ public class TicketManager {
                     if (!isUUID(ticketId)) {
                         continue;
                     }
-                    RandomAccessFile randomAccessFile = new RandomAccessFile(currentTicket.toFile(), "rw");
-                    FileChannel fc = randomAccessFile.getChannel();
-
                     try {
-                        FileChannel channel = new RandomAccessFile(currentTicket.toFile(), "rw").getChannel();
-                        FileLock lock = channel.lock();
-                        try {
-                            lock = channel.tryLock();
-                        } catch (OverlappingFileLockException e) {
-                            logger.trace("ticket {} was already locked, skipping", ticketId);
-                        }
-                        if (lockAcquired(lock)) {
-                            InputStream is = Channels.newInputStream(fc);
-                            String json = new BufferedReader(new InputStreamReader(is)).lines()
-                                    .collect(Collectors.joining("\n"));
-                            ticket = ProcessingTicket.fromJson(json);
-                            // copy to processing folder
-                            Files.copy(currentTicket, processingPath.resolve(ticketId));
-                            validTicket = true;
-                        }
-                        lock.release();
-                        channel.close();
+                        String json = String.join("\n", Files.readAllLines(currentTicket));
+                        ticket = ProcessingTicket.fromJson(json);
+                        // copy to processing folder
+                        Files.copy(currentTicket, processingPath.resolve(ticketId));
+                        validTicket = true;
                     } catch (IOException e) {
-                        logger.trace("unable to read ticket {}", ticketId);
+                        logger.warn("currently unable to process " + ticketId);
+                        validTicket = false;
                     }
                 } while (!validTicket);
                 // remove ticket
