@@ -1,4 +1,4 @@
-package bio.singa.simulation.runner;
+package bio.singa.simulation.runner.converters;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,12 +38,5 @@ public class TimeQuantityConverter implements CommandLine.ITypeConverter<Quantit
         logger.error("unable to convert time {}", timeString);
         throw new IllegalArgumentException(timeString);
     }
-
-    public static void main(String[] args) {
-        String s = "4min";
-        TimeQuantityConverter c = new TimeQuantityConverter();
-        System.out.println(c.convert(s));
-    }
-
 
 }

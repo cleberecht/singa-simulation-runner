@@ -13,7 +13,6 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     </properties>
 
-
     <build>
         <!-- execute package to build jar with dependencies -->
         <plugins>
@@ -39,7 +38,7 @@
                             <archive>
                                 <manifest>
                                     <mainClass>
-                                        bio.singa.simulation.runner.SimulationOverseer
+                                        bio.singa.simulation.runner.cli.TicketGenerator
                                     </mainClass>
                                 </manifest>
                             </archive>
@@ -59,7 +58,7 @@
                     <archive>
                         <manifest>
                             <mainClass>
-                                bio.singa.simulation.runner.SimulationOverseer
+                                bio.singa.simulation.runner.cli.TicketGenerator
                             </mainClass>
                         </manifest>
                     </archive>
@@ -127,6 +126,5 @@
             <version>1.7.21</version>
         </dependency>
     </dependencies>
-
 
 </project>

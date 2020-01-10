@@ -1,4 +1,4 @@
-package bio.singa.simulation.runner;
+package bio.singa.simulation.runner.cli;
 
 import me.tongfei.progressbar.BitOfInformation;
 import me.tongfei.progressbar.ProgressBar;
@@ -26,11 +26,10 @@ import static picocli.CommandLine.Parameters;
 /**
  * @author cl
  */
-@CommandLine.Command(description = "Execute singa simulations from json files.",
+@CommandLine.Command(description = "Monitor and clean simulation process",
         name = "simulation-overseer",
         version = "v0.0.2",
-        mixinStandardHelpOptions = true,
-        sortOptions = false)
+        mixinStandardHelpOptions = true)
 public class SimulationOverseer implements Callable<Void> {
 
     private static final Logger logger = LoggerFactory.getLogger(SimulationOverseer.class);

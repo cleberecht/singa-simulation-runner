@@ -1,12 +1,13 @@
-package bio.singa.simulation.runner;
+package bio.singa.simulation.runner.cli;
 
 import bio.singa.exchange.Converter;
 import bio.singa.exchange.ProcessingTicket;
 import bio.singa.exchange.SimulationRepresentation;
 import bio.singa.exchange.trajectories.TrajectoryDataset;
-import bio.singa.simulation.model.agents.surfacelike.MembraneFactory;
 import bio.singa.simulation.model.simulation.Simulation;
 import bio.singa.simulation.model.simulation.SimulationManager;
+import bio.singa.simulation.runner.managers.ProgressBarManager;
+import bio.singa.simulation.runner.managers.TicketManager;
 import bio.singa.simulation.trajectories.Recorders;
 import bio.singa.simulation.trajectories.nested.NestedUpdateRecorder;
 import org.slf4j.Logger;
@@ -30,20 +31,15 @@ import static tech.units.indriya.unit.Units.SECOND;
 /**
  * @author cl
  */
-@Command(description = "Execute singa simulations from json files.",
+@Command(description = "Execute singa simulations from tickets.",
         name = "simulation-runner",
         version = "v0.0.2",
-        mixinStandardHelpOptions = true,
-        sortOptions = false)
+        mixinStandardHelpOptions = true)
 public class SimulationRunner implements Callable<Void> {
 
     private static final Logger logger = LoggerFactory.getLogger(SimulationRunner.class);
 
     @Parameters(index = "0",
-            description = "The json file with the simulation.")
-    private Path simulationSetupPath;
-
-    @Parameters(index = "1",
             description = "The folder, where ticket are pulled from.")
     private Path ticketDirectory = Paths.get("tickets");
 
@@ -68,48 +64,45 @@ public class SimulationRunner implements Callable<Void> {
         System.out.println("Preparing simulation");
         System.out.println();
 
-        // get simulation file
-        String simulationDocument;
-        try {
-            simulationDocument = String.join("", Files.readAllLines(simulationSetupPath));
-        } catch (IOException e) {
-            logger.error("unable to read simulation file {}", simulationSetupPath, e);
-            return null;
-        }
-
-        // convert json to simulation
-        SimulationRepresentation representation;
-        try {
-            representation = Converter.getRepresentationFrom(simulationDocument);
-        } catch (IOException e) {
-            logger.error("encountered invalid or incomplete simulation setup file {}", simulationSetupPath, e);
-            return null;
-        }
-
         // generate observation directory
         Recorders.createDirectories(targetDirectory);
 
-        // create simulation (to cache entities etc)
-        Simulation simulation = SimulationRepresentation.to(representation);
-        // TODO add "big" progressbar for global simulation progress
-        // for each variation set
+        // initialize ticket manager
         TicketManager ticketManager = new TicketManager(ticketDirectory);
 
         while (ticketManager.ticketsAvailable()) {
-            // create simulation
-            simulation = SimulationRepresentation.to(representation);
-            // set cutoff
-            simulation.getScheduler().setRecalculationCutoff(0.05);
-            // fix subsections
-            MembraneFactory.majorityVoteSubsectionRepresentations(simulation.getGraph());
             // pull ticket
             Optional<ProcessingTicket> optionalTicket = ticketManager.pullTicket();
             if (!optionalTicket.isPresent()) {
                 continue;
             }
             ProcessingTicket ticket = optionalTicket.get();
-            System.out.println("applying variation for ticket " + ticket.getIdentifier());
+
+            // initialize simulation
+            Path simulationSetupPath = ticketDirectory.getParent().resolve(ticket.getSimulation());
+            // get simulation file
+            String simulationDocument;
+            try {
+                simulationDocument = String.join("", Files.readAllLines(simulationSetupPath));
+            } catch (IOException e) {
+                logger.error("unable to read simulation file {}", simulationSetupPath, e);
+                return null;
+            }
+            // convert json to simulation
+            SimulationRepresentation representation;
+            try {
+                representation = Converter.getRepresentationFrom(simulationDocument);
+            } catch (IOException e) {
+                logger.error("encountered invalid or incomplete simulation setup file {}", simulationSetupPath, e);
+                return null;
+            }
+            // create simulation
+            Simulation simulation = SimulationRepresentation.to(representation);
+            // set cutoff
+            simulation.getScheduler().setRecalculationCutoff(0.05);
+
             // get variations from ticket
+            System.out.println("applying variation for ticket " + ticket.getIdentifier());
             ticketManager.redeemTicket(ticket);
             // create time stamped folder for this simulation
             Path timestampedFolder = targetDirectory.resolve(ticket.getSimulation().replaceFirst("[.][^.]+$", "")).resolve(ticket.getIdentifier());
@@ -148,9 +141,9 @@ public class SimulationRunner implements Callable<Void> {
         manager.addGraphUpdateListener(trajectoryObserver);
 
         // add progress bar
-        ProgressBarHandler progressBarHandler = null;
+        ProgressBarManager progressBarHandler = null;
         if (showProgress) {
-            progressBarHandler = new ProgressBarHandler(manager.getSimulationStatus());
+            progressBarHandler = new ProgressBarManager(manager.getSimulationStatus());
         }
 
         // start simulation

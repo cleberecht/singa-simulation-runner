@@ -1,4 +1,4 @@
-package bio.singa.simulation.runner;
+package bio.singa.simulation.runner.managers;
 
 import bio.singa.exchange.ProcessingTicket;
 import bio.singa.exchange.features.FeatureRepresentation;

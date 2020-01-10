@@ -1,4 +1,4 @@
-package bio.singa.simulation.runner;
+package bio.singa.simulation.runner.converters;
 
 import bio.singa.features.quantities.MolarConcentration;
 import org.slf4j.Logger;

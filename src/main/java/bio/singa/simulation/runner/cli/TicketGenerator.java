@@ -1,10 +1,14 @@
-package bio.singa.simulation.runner;
+package bio.singa.simulation.runner.cli;
 
 import bio.singa.exchange.Converter;
 import bio.singa.exchange.ProcessingTicket;
 import bio.singa.exchange.SimulationRepresentation;
 import bio.singa.features.quantities.MolarConcentration;
 import bio.singa.simulation.model.simulation.Simulation;
+import bio.singa.simulation.runner.managers.VariationManager;
+import bio.singa.simulation.runner.converters.ConcentrationUnitConverter;
+import bio.singa.simulation.runner.converters.TimeQuantityConverter;
+import bio.singa.simulation.runner.converters.TimeUnitConverter;
 import bio.singa.simulation.trajectories.Recorders;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,8 +35,7 @@ import static tech.units.indriya.unit.Units.SECOND;
 @Command(description = "Generate tickets for parallel processing",
         name = "ticket-generator",
         version = "v0.0.1",
-        mixinStandardHelpOptions = true,
-        sortOptions = false)
+        mixinStandardHelpOptions = true)
 public class TicketGenerator implements Callable<Void> {
 
     private static final Logger logger = LoggerFactory.getLogger(TicketGenerator.class);
