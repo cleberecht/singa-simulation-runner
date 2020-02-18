@@ -13,6 +13,7 @@ import bio.singa.simulation.trajectories.nested.NestedUpdateRecorder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
+import tech.units.indriya.quantity.Quantities;
 
 import java.io.File;
 import java.io.IOException;
@@ -25,6 +26,7 @@ import java.util.concurrent.CountDownLatch;
 
 import static bio.singa.features.units.UnitProvider.NANO_MOLE_PER_LITRE;
 import static picocli.CommandLine.*;
+import static tech.units.indriya.unit.MetricPrefix.MICRO;
 import static tech.units.indriya.unit.MetricPrefix.MILLI;
 import static tech.units.indriya.unit.Units.SECOND;
 
@@ -99,7 +101,8 @@ public class SimulationRunner implements Callable<Void> {
             // create simulation
             Simulation simulation = SimulationRepresentation.to(representation);
             // set cutoff
-            simulation.getScheduler().setRecalculationCutoff(0.05);
+            simulation.getScheduler().getErrorManager().setLocalNumericalTolerance(0.05);
+            simulation.setMaximalTimeStep(Quantities.getQuantity(500, MICRO(SECOND)));
 
             // get variations from ticket
             System.out.println("applying variation for ticket " + ticket.getIdentifier());

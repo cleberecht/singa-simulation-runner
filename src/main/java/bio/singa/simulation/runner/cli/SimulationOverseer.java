@@ -48,7 +48,6 @@ public class SimulationOverseer implements Callable<Void> {
     private Path processingPath;
     private Path donePath;
 
-
     public static void main(String[] args) {
         CommandLine.call(new SimulationOverseer(), args);
     }
@@ -96,45 +95,86 @@ public class SimulationOverseer implements Callable<Void> {
             return;
         }
         List<String> deathList = new ArrayList<>();
+        // cross check processing tickets
+        try (DirectoryStream<Path> processingDirectoryStream = Files.newDirectoryStream(processingPath)) {
+            for (Path processingDirectoryPath : processingDirectoryStream) {
+                if (!Files.isDirectory(processingDirectoryPath)) {
+                    String ticketIdentifier = processingDirectoryPath.getFileName().toString();
+                    // get alive file
+                    Path aliveFile = targetDirectory.resolve(ticketIdentifier).resolve("alive");
+                    if (simulationFailed(aliveFile)) {
+                        deathList.add(ticketIdentifier);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            logger.warn("Unable to retrieve processing tickets from " + processingPath + ".", e);
+        }
+
+        // check observations
         try (DirectoryStream<Path> observationDirectoryStream = Files.newDirectoryStream(targetDirectory)) {
             for (Path observationDirectoryPath : observationDirectoryStream) {
                 if (Files.isDirectory(observationDirectoryPath)) {
                     String ticketIdentifier = observationDirectoryPath.getFileName().toString();
                     // get alive file
                     Path aliveFile = observationDirectoryPath.resolve("alive");
-                    if (!Files.exists(aliveFile)) {
+                    if (simulationFailed(aliveFile)) {
                         deathList.add(ticketIdentifier);
-                        continue;
-                    }
-                    String aliveTime = String.join("", Files.readAllLines(aliveFile));
-                    if (!aliveTime.equals("done")) {
-                        long lastLifeSign = Long.parseLong(aliveTime);
-                        long currentTime = System.currentTimeMillis();
-                        // 5 minutes
-                        long deathThreshold = 5 * 60 * 1000;
-                        if (currentTime - lastLifeSign > deathThreshold) {
-                            deathList.add(ticketIdentifier);
-                        }
                     }
                 }
             }
         } catch (IOException e) {
             logger.warn("Unable to retrieve simulation paths from " + targetDirectory + ".", e);
         }
+
         for (String ticketIdentifier : deathList) {
-            System.out.println("Simulation "+ ticketIdentifier +" seems to be dead, removing it. ");
+            System.out.println("Simulation " + ticketIdentifier + " seems to be dead, removing it. ");
             Path deadFolder = targetDirectory.resolve(ticketIdentifier);
             // reopen ticket
             try {
-                Files.move(processingPath.resolve(ticketIdentifier), openTicketPath.resolve(ticketIdentifier));
+                Path processing = processingPath.resolve(ticketIdentifier);
+                if (Files.exists(processing)) {
+                    Files.move(processing, openTicketPath.resolve(ticketIdentifier));
+                }
+                Path done = donePath.resolve(ticketIdentifier);
+                if (Files.exists(done)) {
+                    Files.move(done, openTicketPath.resolve(ticketIdentifier));
+                }
             } catch (IOException e) {
-                logger.warn("Unable to reopen ticket " + ticketIdentifier + ".", e);
+                logger.warn("Unable to reopen ticket " + ticketIdentifier + ".");
+                continue;
             }
             // remove dead simulation
             deadFolder.resolve("variations.json").toFile().delete();
             deadFolder.resolve("alive").toFile().delete();
             deadFolder.toFile().delete();
         }
+    }
+
+    private boolean simulationFailed(Path aliveFile) {
+        // no file exists
+        if (!Files.exists(aliveFile)) {
+            return true;
+        }
+        // read file
+        String aliveTime;
+        try {
+            aliveTime = String.join("", Files.readAllLines(aliveFile));
+        } catch (IOException e) {
+            // unale to read file
+            logger.warn("unable to read alive file {}", aliveFile);
+            return true;
+        }
+        // simulation is done
+        if (aliveTime.equals("done")) {
+            return false;
+        }
+        // check timestamp
+        long lastLifeSign = Long.parseLong(aliveTime);
+        long currentTime = System.currentTimeMillis();
+        // 5 minutes no sign
+        long deathThreshold = 5 * 60 * 1000;
+        return currentTime - lastLifeSign > deathThreshold;
     }
 
     private long countFiles(Path directoryPath) {
