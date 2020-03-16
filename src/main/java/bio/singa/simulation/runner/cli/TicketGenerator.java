@@ -5,10 +5,10 @@ import bio.singa.exchange.ProcessingTicket;
 import bio.singa.exchange.SimulationRepresentation;
 import bio.singa.features.quantities.MolarConcentration;
 import bio.singa.simulation.model.simulation.Simulation;
-import bio.singa.simulation.runner.managers.VariationManager;
 import bio.singa.simulation.runner.converters.ConcentrationUnitConverter;
 import bio.singa.simulation.runner.converters.TimeQuantityConverter;
 import bio.singa.simulation.runner.converters.TimeUnitConverter;
+import bio.singa.simulation.runner.managers.VariationManager;
 import bio.singa.simulation.trajectories.Recorders;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,6 +57,11 @@ public class TicketGenerator implements Callable<Void> {
             description = {"The number of observations during simulation",
                     "default: ${DEFAULT-VALUE}"})
     private double observations = 100.0;
+
+    @Option(names = {"-s", "--samples"},
+            description = {"The number of samples per simulation",
+                    "default: ${DEFAULT-VALUE}"})
+    private int samples = 1;
 
     @Option(names = {"-c", "--observed-concentration"},
             description = {"The unit in which concentrations are logged",
@@ -117,12 +122,15 @@ public class TicketGenerator implements Callable<Void> {
         while (variationManager.hasVariationsLeft()) {
             // get next variation set
             variationManager.nextVariationSet();
-            // create id
-            String ticketId = UUID.randomUUID().toString();
-            // create ticket
-            ProcessingTicket ticket = variationManager.generateTicket(ticketId, simulationSetupPath.getFileName().toString(), terminationTime, terminationTime.divide(observations), observedConcentrationUnit, observedTimeUnit);
-            // write ticket
-            variationManager.writeTicket(ticket, openPath);
+            for (int sample = 0; sample < samples; sample++) {
+                // create id
+                String ticketId = UUID.randomUUID().toString();
+                // create ticket
+                ProcessingTicket ticket = variationManager.generateTicket(ticketId, simulationSetupPath.getFileName().toString(), terminationTime, terminationTime.divide(observations), observedConcentrationUnit, observedTimeUnit);
+                variationManager.writeTicket(ticket, openPath);
+                // write ticket
+                variationManager.writeTicket(ticket, openPath);
+            }
             if (maxTickets == -1) {
                 continue;
             } else if (i >= maxTickets) {
